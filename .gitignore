@@ -1,0 +1,13 @@
+# 가상환경 제외
+venv/
+
+# 설정 파일 제외
+config/settings.py
+
+# Python 불필요한 파일
+__pycache__/
+*.py[cod]
+*.sqlite3
+
+# PyCharm 관련 설정 파일 무시
+.idea/
