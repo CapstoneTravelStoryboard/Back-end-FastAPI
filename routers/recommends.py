@@ -39,8 +39,8 @@ def gpt_select_title(destination, purpose, companions, companion_count, season, 
     )
 
     content = response.choices[0].message.content
-    titles = re.split(r'\d+\.\s', content)[1:]  # 숫자.로 시작하는 패턴 기준으로 분리, 첫 빈 항목 제거
-
+    # titles = re.split(r'\d+\.\s', content)[1:]  # 숫자.로 시작하는 패턴 기준으로 분리, 첫 빈 항목 제거
+    titles = [title.strip() for title in re.split(r'\d+\.\s', content)[1:]] # 숫자.로 시작하는 패턴 기준으로 분리, 첫 빈 항목 제거 및 공백 제거
     # title_choice = int(input("제목 번호 입력: ")) - 1
     # selected_title = titles[title_choice]
 
@@ -117,7 +117,7 @@ class IntroOutroResponse(BaseModel):
     intros: List[str]  # 추천된 인트로 목록
     outros: List[str]  # 추천된 아웃트로 목록
 
-@router.post("/title")
+@router.post("/titles")
 def recommend_title(request: TitleRequest) -> List[str]:
     try:
         #인자값 잘 받았는지 console에 출력하고 싶음.
@@ -134,7 +134,7 @@ def recommend_title(request: TitleRequest) -> List[str]:
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/iotro")
+@router.post("/iotros")
 def recommend_intro_outro(title: str = Body(...)) -> IntroOutroResponse:
     try:
         intros, outros = gpt_select_intro_outro(title=title)
