@@ -1,12 +1,11 @@
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Thread
-
-import requests
-from fastapi import APIRouter, FastAPI, HTTPException
-from pydantic import BaseModel
 from typing import List
+
+from fastapi import APIRouter, HTTPException
 from openai import OpenAI
+from pydantic import BaseModel
+
 from config.settings import OPENAI_API_KEY
 from utils.s3_image import download_image_from_url, upload_to_s3
 
@@ -16,8 +15,8 @@ router = APIRouter()
 
 
 class ImageGenerationRequest(BaseModel):
-    storyboard_id : int # 스토리보드 ID
-    order_num : int # 씬 순서
+    storyboard_id: int  # 스토리보드 ID
+    order_num: int  # 씬 순서
     scene_description: str  # 씬 설명
     destination: str  # 목적지
     purpose: str  # 여행 목적
@@ -27,13 +26,9 @@ class ImageGenerationRequest(BaseModel):
     image_urls: List[str]  # 참조 이미지 URL 목록
 
 
-# class ImageGenerationResponse(BaseModel):
-#     image_url: List[str]  # 생성된 이미지 URL 리스트
-
-
-
 # DALL·E 3를 사용하여 이미지를 생성하고 저장하는 함수
-def generate_and_save_image_dalle(storyboard_id, order_num, scene_description, destination, purpose, companion, companion_count, season,
+def generate_and_save_image_dalle(storyboard_id, order_num, scene_description, destination, purpose, companion,
+                                  companion_count, season,
                                   image_urls):
     """
     DALL·E 3 모델을 사용하여 스토리보드 씬 이미지를 생성하고 저장하는 함수입니다.
@@ -51,20 +46,14 @@ def generate_and_save_image_dalle(storyboard_id, order_num, scene_description, d
         companion_count (int): 동행자의 수.
         season (str): 여행지 계절
         image_urls (list): 장면의 시각적 요소를 참고할 수 있는 이미지 URL 리스트.
+        save_path (str): 생성된 이미지를 저장할 파일 경로.
 
     Returns:
         None: 생성된 이미지를 지정된 경로에 저장합니다.
     """
 
-    prompt = f"""
-        You are an expert in generating images for storyboards. 
-        Create a dynamic, cinematic image based on a video storyboard scene description: {scene_description}. 
-        This scene is set in {destination}, where the purpose of the trip is {purpose}. 
-        The traveler is accompanied by {companion_count} {companion}(s). 
-        The scene takes place during the {season} season, which should influence the atmosphere, colors, and overall mood of the image. 
-        Reference the following images of the destination for accuracy in visual elements: {', '.join(image_urls)}.
-        Under no circumstances should the image include overlays, user interface elements, camera equipment, or any signs of filming processes. 
-        The image must solely focus on the scene itself, providing a natural, immersive view that resembles the final, edited shot of a travel video.
+    prompt = f""" 
+        {image_urls}와 {scene_description}에 기반하여, {destination}에서 {purpose}를 목적으로 {companion_count}명의 {companion}과 함께한 {season} 계절의 분위기와 색감을 담은 시네마틱한 이미지
         """
 
     response = client.images.generate(
@@ -82,7 +71,6 @@ def generate_and_save_image_dalle(storyboard_id, order_num, scene_description, d
     local_image_path = f'temp_image_{order_num}_{unique_id}.jpg'
     download_image_from_url(image_url, local_image_path)
     upload_to_s3(local_image_path, f'images/storyboard/{storyboard_id}/{order_num}.jpg')
-    # upload_to_s3(local_image_path, 'images.jpg')
 
     return image_url
 
@@ -113,29 +101,22 @@ def generate_images_multithreaded(requests: List[ImageGenerationRequest], max_th
             image_urls=request.image_urls
         )
 
-    # ThreadPoolExecutor를 사용하여 멀티스레드 처리
-    with ThreadPoolExecutor(max_threads) as executor:
-        future_to_request = {executor.submit(task, req): req for req in requests}
-
-        for future in as_completed(future_to_request):
-            try:
-                result = future.result()
-                results.append(result)
-            except Exception as e:
-                print(f"Error processing request {future_to_request[future]}: {e}")
-
-    return results
-
-
+    threads = [
+        Thread(target=task, args=(req,)) for req in requests
+    ]
+    [thread.start() for thread in threads]
 
 
 @router.post("/images")
 def generate_images_endpoint(request: List[ImageGenerationRequest]):
     print("Request:", request)
+    """
+        클라이언트 요청을 빠르게 응답하고, 스레드를 생성하여 백그라운드 작업 실행.
+    """
+    # 스레드 생성
     try:
-        responses = generate_images_multithreaded(requests=request)
-        # print the generated image URLs for testing
-        print("Generated Image URLs:", responses)
-        return responses
+        generate_images_multithreaded(requests=request)
+
+        return {"message": "Image generation request received. Processing in the background."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Batch image generation failed: {str(e)}")

@@ -31,6 +31,7 @@ def upload_to_s3(local_file: str, s3_file: str, bucket_name: str = AWS_BUCKET_NA
 
 def download_image_from_url(url, local_file_path):
     # 이미지 다운로드
+    print(f'Downloading image from {url} to {local_file_path}')
     response = requests.get(url)
     with open(local_file_path, 'wb') as f:
         f.write(response.content)
