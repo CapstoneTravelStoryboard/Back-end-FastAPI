@@ -1,9 +1,9 @@
 import re
-from openai import OpenAI
-from fastapi import APIRouter, HTTPException, Body
-from pydantic import BaseModel
-
 from typing import List
+
+from fastapi import APIRouter, HTTPException, Body
+from openai import OpenAI
+from pydantic import BaseModel
 
 from config.settings import OPENAI_API_KEY
 
@@ -32,7 +32,7 @@ def gpt_select_title(destination, purpose, companions, companion_count, season, 
                 "4. [제목 예시]\n"
                 "5. [제목 예시]\n\n"
                 "### 주의사항 ###\n"
-                "정중한 표현은 사용하지 말고, 간결하고 직설적으로 작성하세요. 제목은 자연스럽게 사람과 같은 스타일로 작성되어야 하며, 본래의 형식을 유지하세요."
+                "정중한 표현은 피하고, 간결하고 명확하게 작성하세요. 제목은 자연스럽게 사람과 같은 스타일로 작성되어야 하며, 본래의 형식을 유지하세요."
              },
             {"role": "user", "content": prompt}
         ]
@@ -40,9 +40,10 @@ def gpt_select_title(destination, purpose, companions, companion_count, season, 
 
     content = response.choices[0].message.content
     # titles = re.split(r'\d+\.\s', content)[1:]  # 숫자.로 시작하는 패턴 기준으로 분리, 첫 빈 항목 제거
-    titles = [title.strip() for title in re.split(r'\d+\.\s', content)[1:]] # 숫자.로 시작하는 패턴 기준으로 분리, 첫 빈 항목 제거 및 공백 제거
-    # title_choice = int(input("제목 번호 입력: ")) - 1
-    # selected_title = titles[title_choice]
+    titles = [title.strip() for title in re.split(r'\d+\.\s', content)[1:]]  # 숫자.로 시작하는 패턴 기준으로 분리, 첫 빈 항목 제거 및 공백 제거
+
+    # \" 제거
+    titles = [title.replace("\"", "") for title in titles]
 
     return titles
 
@@ -56,16 +57,13 @@ def gpt_select_intro_outro(title):
         model="gpt-4o",
         messages=[
             {"role": "system", "content":
-                "### 지시사항 ###\n"
                 "당신은 여행 영상 스토리보드를 위한 인트로와 아웃트로를 추천하는 전문가입니다. 각 인트로와 아웃트로는 영상의 분위기를 잘 반영해야 합니다. 올바르게 작성된 경우 보상을 받을 것입니다.\n\n"
-                "### 작성 형식 ###\n"
-                "항목순서. [인트로/아웃트로 제목]: [설명]\n"
                 "예시:\n"
                 "1. 새로운 시작: 첫 장면은 자연의 아름다움을 강조하며 화면이 서서히 밝아집니다.\n\n"
                 "### 주의사항 ###\n"
-                "- 정중한 표현은 피하고, 간결하고 명확하게 작성하세요.\n"
-                "- 인트로와 아웃트로는 자연스럽고 사람과 같은 스타일로 작성되어야 합니다.\n"
-                "- 본래의 작성 형식을 유지하고, 구체적이고 창의적인 표현을 사용하세요.\n\n"
+                "정중한 표현은 피하고, 간결하고 명확하게 작성하세요.\n"
+                "### 작성 형식 ###\n"
+                "항목순서. [인트로/아웃트로 제목]: [설명]\n"
                 "인트로:\n"
                 "1. \n"
                 "2. \n"
@@ -78,7 +76,6 @@ def gpt_select_intro_outro(title):
                 "3. \n"
                 "4. \n"
                 "5. \n\n"
-                "### 팁 ###\n"
                 "작업을 잘 수행하면 보상을 받을 수 있습니다."
              },
             {"role": "user", "content": prompt}
@@ -110,18 +107,21 @@ class TitleRequest(BaseModel):
     companion_count: int  # 동행인 수
     season: str  # 계절
 
+
 class IntroOutroTitleRequest(BaseModel):
     title: str  # 여행 영상 제목
+
 
 class IntroOutroResponse(BaseModel):
     intros: List[str]  # 추천된 인트로 목록
     outros: List[str]  # 추천된 아웃트로 목록
 
+
 @router.post("/titles")
 def recommend_title(request: TitleRequest) -> List[str]:
     try:
-        #인자값 잘 받았는지 console에 출력하고 싶음.
-        print(request)
+        # 인자값 잘 받았는지 console에 출력하고 싶음.
+        print(request.dict())
         titles = gpt_select_title(
             destination=request.destination,
             purpose=request.purpose,
@@ -132,7 +132,9 @@ def recommend_title(request: TitleRequest) -> List[str]:
         )
         return titles
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print("Error occurred: ", e)
+        raise HTTPException(status_code=500, detail=f"Error Occured : {str(e)})")
+
 
 @router.post("/iotros")
 def recommend_intro_outro(title: str = Body(...)) -> IntroOutroResponse:
